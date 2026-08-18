@@ -458,26 +458,43 @@ function drawGraph() {
       y: H - (v / max) * H * 0.88 - H * 0.06
     }));
 
-    // Gradient fill
     const grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, fillTop);
     grad.addColorStop(1, fillBot);
 
+    // Gradient fill (smooth)
     ctx.beginPath();
-    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    pts.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else {
+        const pPrev = pts[i-1];
+        const cpX = (pPrev.x + p.x) / 2;
+        ctx.bezierCurveTo(cpX, pPrev.y, cpX, p.y, p.x, p.y);
+      }
+    });
     ctx.lineTo(pts[pts.length - 1].x, H);
     ctx.lineTo(pts[0].x, H);
     ctx.closePath();
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Line
+    // Line (smooth + glow)
     ctx.beginPath();
-    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    pts.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else {
+        const pPrev = pts[i-1];
+        const cpX = (pPrev.x + p.x) / 2;
+        ctx.bezierCurveTo(cpX, pPrev.y, cpX, p.y, p.x, p.y);
+      }
+    });
     ctx.strokeStyle = lineColor;
-    ctx.lineWidth   = 2;
+    ctx.lineWidth   = 3;
     ctx.lineJoin    = 'round';
+    ctx.shadowBlur  = 12;
+    ctx.shadowColor = lineColor;
     ctx.stroke();
+    ctx.shadowBlur  = 0; // reset
   }
 
   // Upload (behind download)
