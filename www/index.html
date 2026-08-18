@@ -489,12 +489,9 @@ function drawGraph() {
       }
     });
     ctx.strokeStyle = lineColor;
-    ctx.lineWidth   = 3;
+    ctx.lineWidth   = 2.5;
     ctx.lineJoin    = 'round';
-    ctx.shadowBlur  = 12;
-    ctx.shadowColor = lineColor;
     ctx.stroke();
-    ctx.shadowBlur  = 0; // reset
   }
 
   // Upload (behind download)
