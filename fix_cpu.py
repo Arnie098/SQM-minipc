@@ -1,4 +1,10 @@
-#!/bin/sh
+import paramiko
+
+ssh = paramiko.SSHClient()
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+ssh.connect('192.168.0.109', username='root', password='admin', timeout=15)
+
+script = """#!/bin/sh
 
 # --- CPU ---
 IDLE=$(top -n 1 | grep '^CPU:' | awk '{for(i=1;i<=NF;i++) if($i=="idle") print $(i-1)}' | tr -d '%')
@@ -22,7 +28,7 @@ UPTIME="${DAYS}d ${HOURS}h ${MINS}m"
 # --- WAN info ---
 IFACE=$(cat /etc/ramtech-sqm-iface 2>/dev/null)
 IFACE=${IFACE:-eth1}
-WAN_IP=$(ip addr show "$IFACE" 2>/dev/null | awk '/inet /{gsub(/\/.*/, "", $2); print $2; exit}')
+WAN_IP=$(ip addr show "$IFACE" 2>/dev/null | awk '/inet /{gsub(/\\/.*/, "", $2); print $2; exit}')
 WAN_IP=${WAN_IP:-"No IP"}
 GW=$(ip route show default 2>/dev/null | awk '{print $3; exit}')
 GW=${GW:--}
@@ -37,6 +43,15 @@ DL_MBPS=$((DL_KBPS / 1000))
 UL_MBPS=$((UL_KBPS / 1000))
 [ "$SQM_EN" = "1" ] && SQM_BOOL=true || SQM_BOOL=false
 
-printf "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
-printf '{"wan_ip":"%s","gateway":"%s","cpu":%d,"ram":%d,"uptime":"%s","sqm_interface":"%s","sqm_download":%d,"sqm_upload":%d,"sqm_enabled":%s}\n' \
+printf "Content-Type: application/json\\r\\nAccess-Control-Allow-Origin: *\\r\\n\\r\\n"
+printf '{"wan_ip":"%s","gateway":"%s","cpu":%d,"ram":%d,"uptime":"%s","sqm_interface":"%s","sqm_download":%d,"sqm_upload":%d,"sqm_enabled":%s}\\n' \\
   "$WAN_IP" "$GW" "$CPU" "$RAM" "$UPTIME" "$SQM_IFACE" "$DL_MBPS" "$UL_MBPS" "$SQM_BOOL"
+"""
+
+stdin, _, _ = ssh.exec_command('cat > /www/cgi-bin/sqm-status')
+stdin.write(script.encode())
+stdin.channel.shutdown_write()
+ssh.exec_command('chmod +x /www/cgi-bin/sqm-status')
+
+ssh.close()
+print("Done")
