@@ -33,8 +33,8 @@ SQM_IFACE=${SQM_IFACE:-$IFACE}
 DL_KBPS=$(uci -q get sqm.@queue[0].download 2>/dev/null); DL_KBPS=${DL_KBPS:-0}
 UL_KBPS=$(uci -q get sqm.@queue[0].upload   2>/dev/null); UL_KBPS=${UL_KBPS:-0}
 SQM_EN=$(uci -q get sqm.@queue[0].enabled    2>/dev/null); SQM_EN=${SQM_EN:-0}
-DL_MBPS=$((DL_KBPS / 1000))
-UL_MBPS=$((UL_KBPS / 1000))
+DL_MBPS=${DL_KBPS:-0}
+UL_MBPS=${UL_KBPS:-0}
 [ "$SQM_EN" = "1" ] && SQM_BOOL=true || SQM_BOOL=false
 
 printf "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
