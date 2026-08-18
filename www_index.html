@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RAMTECH SQM Dashboard</title>
+<meta name="description" content="RAMTECH SQM – OpenWrt Mini PC bandwidth shaping and system monitor dashboard">
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  font-family:Arial,sans-serif;
+  background:#0b1120;
+  color:#e5e7eb;
+  min-height:100vh;
+}
+
+/* ── Header ── */
+.header{
+  background:#111827;
+  border-bottom:1px solid #263244;
+  padding:16px 25px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  position:sticky;top:0;z-index:10;
+}
+.logo{font-size:20px;font-weight:bold;letter-spacing:.5px}
+.logo span{color:#38bdf8}
+.status-indicator{
+  display:flex;align-items:center;gap:7px;
+  font-size:13px;color:#22c55e;
+}
+.status-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:#22c55e;
+  box-shadow:0 0 6px #22c55e;
+  animation:pulse 2s infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Layout ── */
+.container{max-width:1400px;margin:auto;padding:22px}
+
+/* ── Cards ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.card{
+  background:#111827;
+  border:1px solid #1e2d42;
+  border-radius:14px;
+  padding:20px;
+  transition:border-color .2s;
+}
+.card:hover{border-color:#334155}
+.card-title{color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px}
+.value{font-size:26px;font-weight:bold}
+.small{font-size:12px;color:#475569;margin-top:7px}
+
+.download{color:#38bdf8}
+.upload{color:#a78bfa}
+.good{color:#22c55e}
+.warning{color:#f59e0b}
+.danger{color:#ef4444}
+
+/* ── Section ── */
+.section{margin-top:16px}
+.section-title{font-size:15px;font-weight:600;margin-bottom:13px;color:#e2e8f0}
+
+/* ── Status rows ── */
+.row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 0;border-bottom:1px solid #1a2436;
+}
+.row:last-child{border-bottom:none}
+.label{color:#64748b;font-size:13px}
+
+.badge{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.sqm-on{background:#052e1a;color:#22c55e}
+.sqm-off{background:#3f1111;color:#ef4444}
+
+/* ── Progress bars ── */
+.progress{
+  margin-top:8px;height:5px;border-radius:10px;
+  background:#1a2436;overflow:hidden;
+}
+.progress div{
+  height:100%;border-radius:10px;width:0%;
+  transition:width .5s ease,background .5s;
+}
+.bar-cpu{background:#38bdf8}
+.bar-cpu.warn{background:#f59e0b}
+.bar-cpu.hot{background:#ef4444}
+.bar-ram{background:#a78bfa}
+
+/* ── Traffic graph ── */
+.traffic{
+  height:220px;position:relative;
+  background:#0b1120;border-radius:8px;overflow:hidden;
+}
+canvas{display:block;width:100%;height:100%}
+
+.graph-legend{
+  display:flex;gap:18px;margin-top:10px;
+  justify-content:flex-end;
+}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:12px;color:#94a3b8}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+
+/* ── Settings form ── */
+.settings-form{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:14px;
+}
+.field label{
+  display:block;color:#64748b;font-size:11px;
+  text-transform:uppercase;letter-spacing:.6px;
+  margin-bottom:6px;
+}
+.field input,.field select{
+  width:100%;background:#0b1120;border:1px solid #1e2d42;
+  color:#e5e7eb;padding:10px 12px;border-radius:9px;
+  outline:none;font-size:14px;
+  transition:border-color .2s;
+}
+.field input:focus,.field select:focus{border-color:#38bdf8}
+.toggle-wrap{display:flex;align-items:center;gap:9px;min-height:41px}
+.toggle-wrap input{width:17px;height:17px;accent-color:#38bdf8}
+.toggle-wrap label{margin:0;color:#e5e7eb;font-size:14px}
+
+/* ── Buttons ── */
+.settings-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.btn{
+  border:0;border-radius:9px;padding:10px 18px;
+  cursor:pointer;font-weight:600;font-size:13px;
+  transition:opacity .15s,transform .1s;
+}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:#38bdf8;color:#06111d}
+.btn-primary:hover{opacity:.9}
+.btn-secondary{background:#1e293b;color:#e5e7eb;border:1px solid #2d3f55}
+.btn-secondary:hover{border-color:#475569}
+
+.save-message{margin-top:11px;font-size:13px;min-height:18px;transition:color .3s}
+
+/* ── Footer ── */
+.footer{text-align:center;padding:28px;font-size:11px;color:#334155;margin-top:10px}
+
+/* ── Responsive ── */
+@media(max-width:600px){
+  .container{padding:14px}
+  .value{font-size:22px}
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <div class="logo" id="brandDisplay">RAMTECH <span>SQM</span></div>
+  <div class="status-indicator">
+    <div class="status-dot"></div>
+    SYSTEM ONLINE
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ── Top stat cards ── -->
+  <div class="grid">
+
+    <div class="card">
+      <div class="card-title">Download</div>
+      <div class="value download"><span id="download">0.00</span> <small style="font-size:14px">Mbps</small></div>
+      <div class="small">WAN realtime RX</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Upload</div>
+      <div class="value upload"><span id="upload">0.00</span> <small style="font-size:14px">Mbps</small></div>
+      <div class="small">WAN realtime TX</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Total Download</div>
+      <div class="value"><span id="totalrx">—</span></div>
+      <div class="small">WAN received traffic</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Total Upload</div>
+      <div class="value"><span id="totaltx">—</span></div>
+      <div class="small">WAN transmitted traffic</div>
+    </div>
+
+  </div>
+
+  <!-- ── Status row ── -->
+  <div class="section grid">
+
+    <div class="card">
+      <div class="section-title">SQM Status</div>
+
+      <div class="row">
+        <span class="label">Status</span>
+        <span id="sqmStatus" class="badge sqm-off">OFF</span>
+      </div>
+      <div class="row">
+        <span class="label">Interface</span>
+        <span id="sqmInterface">—</span>
+      </div>
+      <div class="row">
+        <span class="label">Download Limit</span>
+        <span id="sqmDownload" class="download">0 Mbps</span>
+      </div>
+      <div class="row">
+        <span class="label">Upload Limit</span>
+        <span id="sqmUpload" class="upload">0 Mbps</span>
+      </div>
+      <div class="row">
+        <span class="label">Queue Disc</span>
+        <span style="color:#a78bfa">CAKE</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Network</div>
+
+      <div class="row">
+        <span class="label">WAN IP</span>
+        <span id="wanip">—</span>
+      </div>
+      <div class="row">
+        <span class="label">LAN IP</span>
+        <span id="lanip">192.168.1.1</span>
+      </div>
+      <div class="row">
+        <span class="label">WAN Interface</span>
+        <span id="waninterface">eth1</span>
+      </div>
+      <div class="row">
+        <span class="label">Gateway</span>
+        <span id="gateway">—</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">System</div>
+
+      <div class="row">
+        <span class="label">CPU</span>
+        <span id="cpu">0%</span>
+      </div>
+      <div class="progress"><div id="cpuBar" class="bar-cpu"></div></div>
+
+      <div class="row" style="margin-top:10px">
+        <span class="label">RAM</span>
+        <span id="ram">0%</span>
+      </div>
+      <div class="progress"><div id="ramBar" class="bar-ram"></div></div>
+
+      <div class="row" style="margin-top:10px">
+        <span class="label">Uptime</span>
+        <span id="uptime">—</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Traffic graph ── -->
+  <div class="section">
+    <div class="card">
+      <div class="section-title">Realtime Internet Traffic</div>
+      <div class="traffic">
+        <canvas id="graph"></canvas>
+      </div>
+      <div class="graph-legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#38bdf8"></div>
+          Download
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#a78bfa"></div>
+          Upload
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Settings ── -->
+  <div class="section">
+    <div class="card">
+      <div class="section-title">SQM &amp; Branding Settings</div>
+
+      <div class="settings-form">
+
+        <div class="field">
+          <label for="companyName">Company / Tag Name</label>
+          <input id="companyName" type="text" value="RAMTECH" maxlength="40">
+        </div>
+
+        <div class="field">
+          <label for="sqmInterfaceInput">SQM Interface</label>
+          <select id="sqmInterfaceInput">
+            <option value="eth1">eth1 (WAN)</option>
+            <option value="eth0">eth0</option>
+            <option value="eth2">eth2</option>
+            <option value="pppoe-wan">pppoe-wan</option>
+            <option value="wan">wan</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="downloadInput">Download Limit (Mbps)</label>
+          <input id="downloadInput" type="number" min="1" max="10000" step="1" value="100">
+        </div>
+
+        <div class="field">
+          <label for="uploadInput">Upload Limit (Mbps)</label>
+          <input id="uploadInput" type="number" min="1" max="10000" step="1" value="100">
+        </div>
+
+        <div class="field">
+          <label>SQM Control</label>
+          <div class="toggle-wrap">
+            <input id="sqmEnabledInput" type="checkbox">
+            <label for="sqmEnabledInput">Enable SQM / CAKE</label>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="settings-actions">
+        <button class="btn btn-primary" onclick="saveDashboardSettings()">SAVE &amp; APPLY</button>
+        <button class="btn btn-secondary" onclick="loadDashboardSettings()">RELOAD</button>
+      </div>
+
+      <div id="saveMessage" class="save-message"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  RAMTECH SQM Router Dashboard &bull; OpenWrt &bull; CAKE QoS
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────
+const MAX_POINTS = 60;
+
+let lastRX = 0, lastTX = 0, lastTime = Date.now();
+let rxHistory = [], txHistory = [];
+
+// ── Helpers ─────────────────────────────────────────────
+function formatBytes(b) {
+  if (b >= 1073741824) return (b / 1073741824).toFixed(2) + ' GB';
+  if (b >= 1048576)    return (b / 1048576).toFixed(2)    + ' MB';
+  if (b >= 1024)       return (b / 1024).toFixed(2)       + ' KB';
+  return b + ' B';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[c]);
+}
+
+// ── Traffic polling ──────────────────────────────────────
+async function getTraffic() {
+  try {
+    const r = await fetch('/cgi-bin/traffic', {cache:'no-store'});
+    const d = await r.json();
+    const now = Date.now();
+    const secs = (now - lastTime) / 1000;
+
+    if (lastRX > 0 && secs > 0) {
+      const rxMbps = Math.max(0, (d.rx - lastRX) * 8 / 1e6 / secs);
+      const txMbps = Math.max(0, (d.tx - lastTX) * 8 / 1e6 / secs);
+
+      document.getElementById('download').textContent = rxMbps.toFixed(2);
+      document.getElementById('upload').textContent   = txMbps.toFixed(2);
+
+      rxHistory.push(rxMbps);
+      txHistory.push(txMbps);
+      if (rxHistory.length > MAX_POINTS) rxHistory.shift();
+      if (txHistory.length > MAX_POINTS) txHistory.shift();
+
+      drawGraph();
+    }
+
+    document.getElementById('totalrx').textContent = formatBytes(d.rx);
+    document.getElementById('totaltx').textContent = formatBytes(d.tx);
+
+    lastRX = d.rx; lastTX = d.tx; lastTime = now;
+  } catch(e) { /* keep trying */ }
+}
+
+// ── Status polling ───────────────────────────────────────
+async function getStatus() {
+  try {
+    const r = await fetch('/cgi-bin/sqm-status', {cache:'no-store'});
+    const d = await r.json();
+
+    document.getElementById('wanip').textContent    = d.wan_ip;
+    document.getElementById('gateway').textContent  = d.gateway;
+    document.getElementById('waninterface').textContent = d.sqm_interface;
+
+    // CPU
+    const cpu = Math.min(100, Math.max(0, d.cpu));
+    document.getElementById('cpu').textContent = cpu + '%';
+    const cpuBar = document.getElementById('cpuBar');
+    cpuBar.style.width = cpu + '%';
+    cpuBar.className = 'bar-cpu' + (cpu >= 85 ? ' hot' : cpu >= 65 ? ' warn' : '');
+
+    // RAM
+    const ram = Math.min(100, Math.max(0, d.ram));
+    document.getElementById('ram').textContent = ram + '%';
+    document.getElementById('ramBar').style.width = ram + '%';
+
+    document.getElementById('uptime').textContent = d.uptime;
+    document.getElementById('sqmInterface').textContent = d.sqm_interface;
+    document.getElementById('sqmDownload').textContent  = d.sqm_download + ' Mbps';
+    document.getElementById('sqmUpload').textContent    = d.sqm_upload   + ' Mbps';
+
+    const s = document.getElementById('sqmStatus');
+    if (d.sqm_enabled) {
+      s.textContent = 'ON'; s.className = 'badge sqm-on';
+    } else {
+      s.textContent = 'OFF'; s.className = 'badge sqm-off';
+    }
+  } catch(e) {}
+}
+
+// ── Graph ────────────────────────────────────────────────
+function drawGraph() {
+  const canvas = document.getElementById('graph');
+  const dpr    = window.devicePixelRatio || 1;
+  const W      = canvas.clientWidth;
+  const H      = canvas.clientHeight;
+
+  if (W === 0 || H === 0) return;
+
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  const allVals = [...rxHistory, ...txHistory];
+  const max = Math.max(1, ...allVals) * 1.1;
+
+  function drawSeries(data, lineColor, fillTop, fillBot) {
+    if (data.length < 2) return;
+
+    const pts = data.map((v, i) => ({
+      x: (i / (MAX_POINTS - 1)) * W,
+      y: H - (v / max) * H * 0.88 - H * 0.06
+    }));
+
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, fillTop);
+    grad.addColorStop(1, fillBot);
+
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.lineTo(pts[pts.length - 1].x, H);
+    ctx.lineTo(pts[0].x, H);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth   = 2;
+    ctx.lineJoin    = 'round';
+    ctx.stroke();
+  }
+
+  // Upload (behind download)
+  drawSeries(txHistory, '#a78bfa', 'rgba(167,139,250,0.22)', 'rgba(167,139,250,0)');
+  // Download (in front)
+  drawSeries(rxHistory, '#38bdf8', 'rgba(56,189,248,0.25)',  'rgba(56,189,248,0)');
+
+  // Y-axis max label
+  ctx.fillStyle = '#334155';
+  ctx.font = '10px Arial';
+  ctx.textAlign = 'right';
+  ctx.fillText(max.toFixed(1) + ' Mbps', W - 4, 14);
+}
+
+// ── Settings ─────────────────────────────────────────────
+async function loadDashboardSettings() {
+  try {
+    const r = await fetch('/cgi-bin/sqm-settings?t=' + Date.now(), {cache:'no-store'});
+    const d = await r.json();
+
+    const company = d.company || 'RAMTECH';
+    document.getElementById('companyName').value = company;
+    document.getElementById('brandDisplay').innerHTML =
+      escapeHtml(company) + ' <span>SQM</span>';
+
+    document.getElementById('sqmInterfaceInput').value = d.interface || 'eth1';
+    document.getElementById('downloadInput').value     = Number(d.download || 100);
+    document.getElementById('uploadInput').value       = Number(d.upload   || 100);
+    document.getElementById('sqmEnabledInput').checked =
+      Number(d.enabled) === 1 || d.enabled === true;
+
+    document.getElementById('lanip').textContent = window.location.hostname || '192.168.1.1';
+  } catch(e) {
+    document.getElementById('saveMessage').textContent = 'Settings backend not reachable.';
+    document.getElementById('saveMessage').style.color = '#ef4444';
+  }
+}
+
+async function saveDashboardSettings() {
+  const msg      = document.getElementById('saveMessage');
+  msg.textContent = 'Applying…';
+  msg.style.color = '#94a3b8';
+
+  const company  = document.getElementById('companyName').value.trim() || 'RAMTECH';
+  const iface    = document.getElementById('sqmInterfaceInput').value;
+  const download = Math.max(1, Number(document.getElementById('downloadInput').value)  || 1);
+  const upload   = Math.max(1, Number(document.getElementById('uploadInput').value)    || 1);
+  const enabled  = document.getElementById('sqmEnabledInput').checked ? '1' : '0';
+
+  const body = new URLSearchParams({company, interface: iface,
+    download: String(download), upload: String(upload), enabled});
+
+  try {
+    const r = await fetch('/cgi-bin/sqm-settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: body.toString()
+    });
+    const d = await r.json();
+    if (!r.ok || !d.success) throw new Error('apply failed');
+
+    document.getElementById('brandDisplay').innerHTML =
+      escapeHtml(company) + ' <span>SQM</span>';
+    document.getElementById('sqmDownload').textContent  = download + ' Mbps';
+    document.getElementById('sqmUpload').textContent    = upload   + ' Mbps';
+    document.getElementById('sqmInterface').textContent = iface;
+
+    const s = document.getElementById('sqmStatus');
+    if (enabled === '1') { s.textContent = 'ON';  s.className = 'badge sqm-on';  }
+    else                 { s.textContent = 'OFF'; s.className = 'badge sqm-off'; }
+
+    msg.textContent = '✓ Saved and applied successfully.';
+    msg.style.color = '#22c55e';
+    setTimeout(() => { msg.textContent = ''; }, 4000);
+  } catch(e) {
+    msg.textContent = '✗ Failed — check /cgi-bin/sqm-settings.';
+    msg.style.color = '#ef4444';
+  }
+}
+
+// ── Boot ─────────────────────────────────────────────────
+getTraffic();
+getStatus();
+loadDashboardSettings();
+
+setInterval(getTraffic, 1000);
+setInterval(getStatus,  5000);
+</script>
+
+</body>
+</html>

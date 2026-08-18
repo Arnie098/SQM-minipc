@@ -1,0 +1,52 @@
+#!/bin/sh
+
+# --- CPU (two /proc/stat samples 200ms apart) ---
+S1=$(grep '^cpu ' /proc/stat | awk '{t=$2+$3+$4+$5+$6+$7+$8; print t,$5}')
+sleep 0.2
+S2=$(grep '^cpu ' /proc/stat | awk '{t=$2+$3+$4+$5+$6+$7+$8; print t,$5}')
+
+T1=$(printf '%s' "$S1" | awk '{print $1}')
+I1=$(printf '%s' "$S1" | awk '{print $2}')
+T2=$(printf '%s' "$S2" | awk '{print $1}')
+I2=$(printf '%s' "$S2" | awk '{print $2}')
+
+DT=$((T2 - T1))
+DI=$((I2 - I1))
+[ "$DT" -gt 0 ] && CPU=$((100 * (DT - DI) / DT)) || CPU=0
+[ "$CPU" -gt 100 ] && CPU=100
+[ "$CPU" -lt 0   ] && CPU=0
+
+# --- RAM ---
+MEM_TOTAL=$(awk '/MemTotal/{print $2}' /proc/meminfo)
+MEM_AVAIL=$(awk '/MemAvailable/{print $2}' /proc/meminfo)
+MEM_USED=$((MEM_TOTAL - MEM_AVAIL))
+[ "$MEM_TOTAL" -gt 0 ] && RAM=$((100 * MEM_USED / MEM_TOTAL)) || RAM=0
+
+# --- Uptime ---
+USEC=$(cut -d. -f1 /proc/uptime)
+DAYS=$((USEC / 86400))
+HOURS=$(( (USEC % 86400) / 3600 ))
+MINS=$(( (USEC % 3600) / 60 ))
+UPTIME="${DAYS}d ${HOURS}h ${MINS}m"
+
+# --- WAN info ---
+IFACE=$(cat /etc/ramtech-sqm-iface 2>/dev/null)
+IFACE=${IFACE:-eth1}
+WAN_IP=$(ip addr show "$IFACE" 2>/dev/null | awk '/inet /{gsub(/\/.*/, "", $2); print $2; exit}')
+WAN_IP=${WAN_IP:-"No IP"}
+GW=$(ip route show default 2>/dev/null | awk '{print $3; exit}')
+GW=${GW:--}
+
+# --- SQM settings via UCI ---
+SQM_IFACE=$(uci -q get sqm.@queue[0].interface 2>/dev/null)
+SQM_IFACE=${SQM_IFACE:-$IFACE}
+DL_KBPS=$(uci -q get sqm.@queue[0].download 2>/dev/null); DL_KBPS=${DL_KBPS:-0}
+UL_KBPS=$(uci -q get sqm.@queue[0].upload   2>/dev/null); UL_KBPS=${UL_KBPS:-0}
+SQM_EN=$(uci -q get sqm.@queue[0].enabled    2>/dev/null); SQM_EN=${SQM_EN:-0}
+DL_MBPS=$((DL_KBPS / 1000))
+UL_MBPS=$((UL_KBPS / 1000))
+[ "$SQM_EN" = "1" ] && SQM_BOOL=true || SQM_BOOL=false
+
+printf "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
+printf '{"wan_ip":"%s","gateway":"%s","cpu":%d,"ram":%d,"uptime":"%s","sqm_interface":"%s","sqm_download":%d,"sqm_upload":%d,"sqm_enabled":%s}\n' \
+  "$WAN_IP" "$GW" "$CPU" "$RAM" "$UPTIME" "$SQM_IFACE" "$DL_MBPS" "$UL_MBPS" "$SQM_BOOL"

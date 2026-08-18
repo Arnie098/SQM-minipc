@@ -1,0 +1,40 @@
+#!/bin/sh
+# /etc/uci-defaults/99-ramtech-sqm
+# Runs ONCE on first boot after flashing the RAMTECH SQM image.
+# Sets hostname, disables flow offloading (required for CAKE),
+# enables packet steering, and pre-configures SQM with CAKE.
+
+# Hostname
+uci set system.@system[0].hostname='ramtech-sqm'
+uci commit system
+
+# Disable software + hardware flow offloading (breaks CAKE/SQM)
+uci set firewall.@defaults[0].flow_offloading='0'
+uci set firewall.@defaults[0].flow_offloading_hw='0'
+uci commit firewall
+
+# Enable packet steering (better multi-core CPU usage for SQM)
+uci set network.globals.packet_steering='1'
+uci commit network
+
+# Configure SQM with CAKE (100 Mbps default, user adjusts via dashboard)
+uci -q get sqm.@queue[0] >/dev/null 2>&1 || uci add sqm queue >/dev/null 2>&1
+uci set sqm.@queue[0].interface='eth1'
+uci set sqm.@queue[0].download='100000'
+uci set sqm.@queue[0].upload='100000'
+uci set sqm.@queue[0].enabled='1'
+uci set sqm.@queue[0].qdisc='cake'
+uci set sqm.@queue[0].script='piece_of_cake.qos'
+uci set sqm.@queue[0].linklayer='none'
+uci set sqm.@queue[0].debug_logging='0'
+uci set sqm.@queue[0].verbosity='5'
+uci commit sqm
+
+/etc/init.d/sqm enable
+/etc/init.d/sqm start
+
+# Persist brand defaults
+printf 'RAMTECH' > /etc/ramtech-brand
+printf 'eth1'    > /etc/ramtech-sqm-iface
+
+exit 0

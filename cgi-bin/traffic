@@ -1,0 +1,13 @@
+#!/bin/sh
+IFACE=$(cat /etc/ramtech-sqm-iface 2>/dev/null)
+IFACE=${IFACE:-eth1}
+
+LINE=$(grep "[[:space:]]${IFACE}:" /proc/net/dev 2>/dev/null)
+[ -z "$LINE" ] && LINE=$(grep "${IFACE}:" /proc/net/dev 2>/dev/null)
+
+DATA=$(printf '%s' "$LINE" | cut -d: -f2-)
+RX=$(printf '%s' "$DATA" | awk '{print $1+0}')
+TX=$(printf '%s' "$DATA" | awk '{print $9+0}')
+
+printf "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
+printf '{"rx":%s,"tx":%s}\n' "${RX:-0}" "${TX:-0}"
