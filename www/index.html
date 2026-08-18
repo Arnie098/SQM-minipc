@@ -309,12 +309,12 @@ canvas{display:block;width:100%;height:100%}
         </div>
 
         <div class="field">
-          <label for="downloadInput">Download Limit (Kbps)</label>
+          <label for="downloadInput">Download Limit (Mbps)</label>
           <input id="downloadInput" type="number" min="1" max="10000" step="1" value="100">
         </div>
 
         <div class="field">
-          <label for="uploadInput">Upload Limit (Kbps)</label>
+          <label for="uploadInput">Upload Limit (Mbps)</label>
           <input id="uploadInput" type="number" min="1" max="10000" step="1" value="100">
         </div>
 
@@ -416,8 +416,8 @@ async function getStatus() {
 
     document.getElementById('uptime').textContent = d.uptime;
     document.getElementById('sqmInterface').textContent = d.sqm_interface;
-    document.getElementById('sqmDownload').textContent  = d.sqm_download + ' Kbps';
-    document.getElementById('sqmUpload').textContent    = d.sqm_upload   + ' Kbps';
+    document.getElementById('sqmDownload').textContent  = d.sqm_download + ' Mbps';
+    document.getElementById('sqmUpload').textContent    = d.sqm_upload   + ' Mbps';
 
     const s = document.getElementById('sqmStatus');
     if (d.sqm_enabled) {
@@ -552,8 +552,8 @@ async function saveDashboardSettings() {
 
     document.getElementById('brandDisplay').innerHTML =
       escapeHtml(company) + ' <span>SQM</span>';
-    document.getElementById('sqmDownload').textContent  = download + ' Kbps';
-    document.getElementById('sqmUpload').textContent    = upload   + ' Kbps';
+    document.getElementById('sqmDownload').textContent  = download + ' Mbps';
+    document.getElementById('sqmUpload').textContent    = upload   + ' Mbps';
     document.getElementById('sqmInterface').textContent = iface;
 
     const s = document.getElementById('sqmStatus');

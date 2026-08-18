@@ -22,12 +22,14 @@ if [ "$REQUEST_METHOD" = "POST" ]; then
     ENABLED=$(get_field "$BODY" "enabled")
     BRAND=$(get_field "$BODY" "brand")
 
-    # Values are now in Kbps
-    DL_KBPS=$(urldecode "$DL_RAW")
-    UL_KBPS=$(urldecode "$UL_RAW")
+    DL_MBPS=$(urldecode "$DL_RAW")
+    UL_MBPS=$(urldecode "$UL_RAW")
     
     IFACE_NEW_CLEAN=$(urldecode "$IFACE_NEW" | awk '{print $1}')
     BRAND=$(urldecode "$BRAND")
+
+    DL_KBPS=$(printf '%s' "$DL_MBPS" | awk '{printf "%d", $1*1000}')
+    UL_KBPS=$(printf '%s' "$UL_MBPS" | awk '{printf "%d", $1*1000}')
 
     [ -z "$DL_KBPS" ] || [ "$DL_KBPS" -lt 100 ] 2>/dev/null && DL_KBPS=10000
     [ -z "$UL_KBPS" ] || [ "$UL_KBPS" -lt 100 ] 2>/dev/null && UL_KBPS=10000
@@ -49,7 +51,7 @@ if [ "$REQUEST_METHOD" = "POST" ]; then
     /etc/init.d/sqm restart >/dev/null 2>&1
 
     printf 'Content-Type: application/json\r\n\r\n'
-    printf '{"success":true,"status":"ok","download":%s,"upload":%s,"interface":"%s","enabled":%s}'         "$DL_KBPS" "$UL_KBPS" "$IFACE" "${ENABLED:-1}"
+    printf '{"success":true,"status":"ok","download":%s,"upload":%s,"interface":"%s","enabled":%s}'         "$DL_MBPS" "$UL_MBPS" "$IFACE" "${ENABLED:-1}"
 else
     # GET request - return raw Kbps values
     DL_K=$(uci get "${SQM_SECTION}.download" 2>/dev/null)
@@ -57,9 +59,9 @@ else
     EN=$(uci get "${SQM_SECTION}.enabled" 2>/dev/null)
     IF=$(uci get "${SQM_SECTION}.interface" 2>/dev/null)
     
-    # Don't divide by 1000 anymore
-    DL_M=${DL_K:-10000}
-    UL_M=${UL_K:-10000}
+    # Divide by 1000 for Mbps
+    DL_M=$(printf '%s' "$DL_K" | awk '{printf "%d", $1/1000}')
+    UL_M=$(printf '%s' "$UL_K" | awk '{printf "%d", $1/1000}')
     BRAND=$(cat /etc/ramtech-brand 2>/dev/null)
     
     IF_UI="$IF"
