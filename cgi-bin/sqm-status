@@ -6,6 +6,10 @@ IDLE=$(top -n 1 | grep '^CPU:' | awk '{for(i=1;i<=NF;i++) if($i=="idle") print $
 [ "$CPU" -gt 100 ] && CPU=100
 [ "$CPU" -lt 0   ] && CPU=0
 
+# --- Temperature ---
+TEMP_RAW=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null)
+[ -n "$TEMP_RAW" ] && [ "$TEMP_RAW" -gt 0 ] && TEMP=$((TEMP_RAW / 1000)) || TEMP=0
+
 # --- RAM ---
 MEM_TOTAL=$(awk '/MemTotal/{print $2}' /proc/meminfo)
 MEM_AVAIL=$(awk '/MemAvailable/{print $2}' /proc/meminfo)
@@ -38,5 +42,5 @@ UL_MBPS=$((UL_KBPS / 1000))
 [ "$SQM_EN" = "1" ] && SQM_BOOL=true || SQM_BOOL=false
 
 printf "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
-printf '{"wan_ip":"%s","gateway":"%s","cpu":%d,"ram":%d,"uptime":"%s","sqm_interface":"%s","sqm_download":%d,"sqm_upload":%d,"sqm_enabled":%s}\n' \
-  "$WAN_IP" "$GW" "$CPU" "$RAM" "$UPTIME" "$SQM_IFACE" "$DL_MBPS" "$UL_MBPS" "$SQM_BOOL"
+printf '{"wan_ip":"%s","gateway":"%s","cpu":%d,"temp":%d,"ram":%d,"uptime":"%s","sqm_interface":"%s","sqm_download":%d,"sqm_upload":%d,"sqm_enabled":%s}\n' \
+  "$WAN_IP" "$GW" "$CPU" "$TEMP" "$RAM" "$UPTIME" "$SQM_IFACE" "$DL_MBPS" "$UL_MBPS" "$SQM_BOOL"
